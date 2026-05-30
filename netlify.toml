@@ -2,5 +2,5 @@
   publish = "public"
   functions = "netlify/functions"
 
-[functions]
+[functions."conteudo-do-dia"]
   timeout = 30
