@@ -71,7 +71,7 @@ Inclua exatamente 5 pontos bem desenvolvidos.`;
 
     const body = JSON.stringify({
       model: "claude-haiku-4-5",
-      max_tokens: 2000,
+      max_tokens: 3000,
       messages: [{ role: "user", content: prompt }]
     });
 
