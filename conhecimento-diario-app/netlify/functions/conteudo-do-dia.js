@@ -4,6 +4,7 @@ exports.handler = async function(event, context) {
   if (!apiKey) {
     return {
       statusCode: 500,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ error: "Chave de API não configurada." })
     };
   }
@@ -38,65 +39,93 @@ exports.handler = async function(event, context) {
   const livro = livros[dow];
 
   const prompt = `Você é um curador de conhecimento para empreendedores brasileiros.
-Gere um conteúdo educativo muito detalhado (leitura de 10-15 minutos) em português brasileiro.
+Gere um conteúdo educativo muito detalhado em português brasileiro.
 
 Data: ${dataStr}
 Área de hoje: ${area}
 ${area.includes("livro") || area.includes("Resumo") ? `Livro sugerido: ${livro}` : ""}
 
-Responda APENAS com um JSON válido, sem markdown, sem texto fora do JSON:
+Responda APENAS com JSON válido, sem markdown nem texto fora do JSON:
 {
   "titulo": "título chamativo com emoji",
   "categoria": "nome curto da categoria",
-  "introducao": "2 parágrafos de introdução separados por \\n\\n",
+  "introducao": "2 parágrafos separados por \\n\\n",
   "pontos": [
-    {
-      "titulo": "1. Título do ponto",
-      "conteudo": "2-3 parágrafos desenvolvidos com exemplos práticos de negócios"
-    }
+    {"titulo": "1. Título", "conteudo": "2-3 parágrafos com exemplos práticos"}
   ],
   "licao": "1 insight poderoso em 2-3 frases",
-  "acao": "1 ação concreta e específica para fazer hoje, detalhada",
+  "acao": "1 ação concreta para fazer hoje",
   "citacao": "texto da citação",
-  "autor_citacao": "Nome do autor",
+  "autor_citacao": "Nome do Autor",
   "recursos": [
-    { "tipo": "Livro", "nome": "Nome — Autor", "descricao": "breve descrição prática" },
-    { "tipo": "Podcast", "nome": "Nome do podcast", "descricao": "breve descrição prática" },
-    { "tipo": "Ferramenta", "nome": "Nome da ferramenta", "descricao": "breve descrição prática" }
+    {"tipo": "Livro", "nome": "Nome — Autor", "descricao": "descrição prática"},
+    {"tipo": "Podcast", "nome": "Nome", "descricao": "descrição prática"},
+    {"tipo": "Ferramenta", "nome": "Nome", "descricao": "descrição prática"}
   ]
 }
 
-Inclua exatamente 5 pontos bem desenvolvidos. Seja detalhado, prático e inspirador.`;
+Inclua exatamente 5 pontos bem desenvolvidos.`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4000,
-        messages: [{ role: "user", content: prompt }]
-      })
+    const https = require("https");
+
+    const body = JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      messages: [{ role: "user", content: prompt }]
     });
 
-    const data = await response.json();
+    const result = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: "api.anthropic.com",
+        path: "/v1/messages",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01"
+        }
+      };
+
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", chunk => data += chunk);
+        res.on("end", () => resolve({ status: res.statusCode, body: data }));
+      });
+
+      req.on("error", reject);
+      req.write(body);
+      req.end();
+    });
+
+    if (result.status !== 200) {
+      return {
+        statusCode: 500,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ error: "Erro da API: " + result.body })
+      };
+    }
+
+    const data = JSON.parse(result.body);
     const text = data.content[0].text.trim();
-    const clean = text.replace(/^```json\s*/,"").replace(/```\s*$/,"").trim();
+    const clean = text.replace(/^```json\s*/,"").replace(/\s*```$/,"").trim();
     const parsed = JSON.parse(clean);
 
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      },
       body: JSON.stringify({ ...parsed, data: dataStr })
     };
+
   } catch(err) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Erro ao gerar conteúdo: " + err.message })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: "Erro interno: " + err.message })
     };
   }
 };
