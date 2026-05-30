@@ -1,0 +1,4 @@
+[build]
+  base = "conhecimento-diario-app"
+  publish = "conhecimento-diario-app/public"
+  functions = "conhecimento-diario-app/netlify/functions"
