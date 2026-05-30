@@ -1,5 +1,6 @@
 exports.handler = async function(event, context) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
+  const baseUrl = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/$/, "");
 
   if (!apiKey) {
     return {
@@ -67,47 +68,32 @@ Responda APENAS com JSON válido, sem markdown nem texto fora do JSON:
 Inclua exatamente 5 pontos bem desenvolvidos.`;
 
   try {
-    const https = require("https");
-
-    const body = JSON.stringify({
+    const reqBody = JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
       messages: [{ role: "user", content: prompt }]
     });
 
-    const result = await new Promise((resolve, reject) => {
-      const options = {
-        hostname: "api.anthropic.com",
-        path: "/v1/messages",
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(body),
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01"
-        }
-      };
-
-      const req = https.request(options, (res) => {
-        let data = "";
-        res.on("data", chunk => data += chunk);
-        res.on("end", () => resolve({ status: res.statusCode, body: data }));
-      });
-
-      req.on("error", reject);
-      req.write(body);
-      req.end();
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: reqBody
     });
 
-    if (result.status !== 200) {
+    if (!response.ok) {
+      const errText = await response.text();
       return {
         statusCode: 500,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: "Erro da API: " + result.body })
+        body: JSON.stringify({ error: "Erro da API: " + errText })
       };
     }
 
-    const data = JSON.parse(result.body);
+    const data = await response.json();
     const text = data.content[0].text.trim();
     const clean = text.replace(/^```json\s*/,"").replace(/\s*```$/,"").trim();
     const parsed = JSON.parse(clean);
