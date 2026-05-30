@@ -1,4 +1,3 @@
 [build]
-  base = "conhecimento-diario-app"
   publish = "public"
   functions = "netlify/functions"
